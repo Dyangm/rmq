@@ -3,6 +3,7 @@ package rmq
 import (
 	"github.com/streadway/amqp"
 	"time"
+	"fmt"
 )
 
 const RECONNECT_INTERVAL = 5
@@ -75,10 +76,13 @@ func (c *Consumer) connect() (<-chan amqp.Delivery, error) {
 
 func (c *Consumer) reconnect() <-chan amqp.Delivery {
 	for {
+		fmt.Println("rmq reconneting")
 		msgChan, err := c.connect()
 		if err != nil {
+			fmt.Printf("rmq reconnect failed %s", err)
 			time.Sleep(RECONNECT_INTERVAL*time.Second)
 		} else {
+			fmt.Println("rmq reconnect success")
 			return msgChan
 		}
 
