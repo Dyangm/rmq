@@ -1,12 +1,12 @@
 package rmq
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/streadway/amqp"
 	"time"
-	"fmt"
 )
 
-const RECONNECT_INTERVAL = 5
+const ReconnectInterval = 5
 
 type Consumer struct {
 	uri       string
@@ -19,10 +19,10 @@ type Consumer struct {
 	doneChan  chan error
 }
 
-func NewConsumer(uri string, queueName string, tag string) (*Consumer, error) {
+func NewConsumer(uri, queue, tag string) (*Consumer, error) {
 	c := &Consumer{}
 	c.uri = uri
-	c.queue = queueName
+	c.queue = queue
 	c.tag = tag
 	c.closeChan = make(chan struct{})
 	c.MsgChan = make(chan *amqp.Delivery)
@@ -53,17 +53,16 @@ func (c *Consumer) connect() (<-chan amqp.Delivery, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	ch.Qos(5000, 0, true)
 	msgChan, err := ch.Consume(
 		c.queue,
-		c.tag,     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		c.tag, // consumer
+		false, // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +75,13 @@ func (c *Consumer) connect() (<-chan amqp.Delivery, error) {
 
 func (c *Consumer) reconnect() <-chan amqp.Delivery {
 	for {
-		fmt.Println("rmq reconneting")
+		log.Info("rmq reconneting")
 		msgChan, err := c.connect()
 		if err != nil {
-			fmt.Printf("rmq reconnect failed %s", err)
-			time.Sleep(RECONNECT_INTERVAL*time.Second)
+			log.Errorf("rmq reconnect failed %s", err)
+			time.Sleep(ReconnectInterval * time.Second)
 		} else {
-			fmt.Println("rmq reconnect success")
+			log.Info("rmq reconnect success")
 			return msgChan
 		}
 
@@ -103,6 +102,7 @@ func (c *Consumer) handle(msgChan <-chan amqp.Delivery) {
 				msgChan = c.reconnect()
 			} else {
 				c.MsgChan <- &msg
+				msg.Ack(false)
 			}
 		case <-c.closeChan:
 			if err := c.channel.Cancel(c.tag, true); err != nil {
@@ -119,4 +119,3 @@ func (c *Consumer) handle(msgChan <-chan amqp.Delivery) {
 	}
 
 }
-

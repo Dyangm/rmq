@@ -13,7 +13,7 @@ func TestNewConsumer(t *testing.T) {
 
 	defer c.Shutdown()
 
-	msg := <- c.MsgChan
+	msg := <-c.MsgChan
 	if msg != nil {
 		return
 	}
