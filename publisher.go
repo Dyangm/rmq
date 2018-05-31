@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+const (
+	kMessageChanSize = 100000
+)
+
 type Publisher struct {
 	uri       string
 	exchange  string
@@ -27,7 +31,7 @@ func NewPublisher(uri, exchange, routingKey, tag string) (*Publisher, error) {
 	p.key = routingKey
 	p.tag = tag
 
-	p.MsgChan = make(chan []byte)
+	p.MsgChan = make(chan []byte, kMessageChanSize)
 	p.closeChan = make(chan struct{})
 	p.doneChan = make(chan error)
 	p.msgMap = make([][]byte, 0)
