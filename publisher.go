@@ -111,6 +111,7 @@ func (p *Publisher) handle() {
 				err := p.sendMsg(msg)
 				if err != nil {
 					p.Err = err
+					p.conn.Close()
 					p.reconnect()
 					p.msgMap = append(p.msgMap, msg)
 				} else {

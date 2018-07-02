@@ -99,6 +99,7 @@ func (c *Consumer) handle(msgChan <-chan amqp.Delivery) {
 		select {
 		case msg, ok := <-msgChan:
 			if !ok {
+				c.conn.Close()
 				msgChan = c.reconnect()
 			} else {
 				c.MsgChan <- &msg
