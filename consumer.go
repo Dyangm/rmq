@@ -9,21 +9,25 @@ import (
 const ReconnectInterval = 5
 
 type Consumer struct {
-	uri       string
-	queue     string
-	tag       string
-	conn      *amqp.Connection
-	channel   *amqp.Channel
-	MsgChan   chan *amqp.Delivery
-	closeChan chan struct{}
-	doneChan  chan error
+	uri           string
+	queue         string
+	tag           string
+	unAck         bool
+	prefetchCount int
+	conn          *amqp.Connection
+	channel       *amqp.Channel
+	MsgChan       chan *amqp.Delivery
+	closeChan     chan struct{}
+	doneChan      chan error
 }
 
-func NewConsumer(uri, queue, tag string) (*Consumer, error) {
+func NewConsumer(uri, queue, tag string, unAck bool, prefetchCount int) (*Consumer, error) {
 	c := &Consumer{}
 	c.uri = uri
 	c.queue = queue
 	c.tag = tag
+	c.unAck = unAck
+	c.prefetchCount = prefetchCount
 	c.closeChan = make(chan struct{})
 	c.MsgChan = make(chan *amqp.Delivery)
 	c.doneChan = make(chan error)
@@ -53,11 +57,14 @@ func (c *Consumer) connect() (<-chan amqp.Delivery, error) {
 	if err != nil {
 		return nil, err
 	}
-	ch.Qos(5000, 0, true)
+	if !c.unAck {
+		ch.Qos(c.prefetchCount, 0, true)
+	}
+
 	msgChan, err := ch.Consume(
 		c.queue,
 		c.tag, // consumer
-		false, // auto-ack
+		c.unAck, // auto-ack
 		false, // exclusive
 		false, // no-local
 		false, // no-wait
@@ -78,7 +85,7 @@ func (c *Consumer) reconnect() <-chan amqp.Delivery {
 		log.Info("rmq reconneting")
 		msgChan, err := c.connect()
 		if err != nil {
-			log.Errorf("rmq reconnect failed %s", err)
+			log.Error("rmq reconnect failed ", err)
 			time.Sleep(ReconnectInterval * time.Second)
 		} else {
 			log.Info("rmq reconnect success")
@@ -103,7 +110,10 @@ func (c *Consumer) handle(msgChan <-chan amqp.Delivery) {
 				msgChan = c.reconnect()
 			} else {
 				c.MsgChan <- &msg
-				msg.Ack(false)
+				if !c.unAck {
+					msg.Ack(false)
+				}
+
 			}
 		case <-c.closeChan:
 			if err := c.channel.Cancel(c.tag, true); err != nil {
